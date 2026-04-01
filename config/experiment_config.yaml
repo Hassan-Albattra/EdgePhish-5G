@@ -1,0 +1,224 @@
+# ============================================================
+# EdgePhish-5G: Experiment Configuration
+# Paper: Real-Time Phishing URL Detection in 5G Core Networks
+#        Using Lightweight Hybrid BERT-TF-IDF with Edge Intelligence
+# ============================================================
+
+project:
+  name: "EdgePhish-5G"
+  version: "1.0.0"
+  seed: 42
+  output_dir: "results/"
+  log_dir: "logs/"
+  checkpoint_dir: "models/checkpoints/"
+  
+  metadata:
+  dataset_doi: "https://doi.org/10.5281/zenodo.19371661"
+  paper: "ITC-Egypt 2026"
+  author: "Hassan AlBattra"
+
+# ── Dataset ─────────────────────────────────────────────────
+dataset:
+  # Primary: 340K URL dataset from source manuscript
+  # Dataset DOI: https://doi.org/10.5281/zenodo.19371661
+  path: "data/urls_dataset.csv"
+  url_column: "url"
+  label_column: "label"          # 1=phishing, 0=legitimate
+  phishing_label: 1
+  legitimate_label: 0
+  total_size: 340000
+  phishing_count: 170000
+  legitimate_count: 170000
+  max_url_length: 512            # truncate right beyond this
+
+  # Temporal split boundaries (simulated by index in absence of timestamps)
+  splits:
+    train_ratio: 0.70            # 238,000 URLs
+    val_ratio: 0.15              # 51,000 URLs
+    test_ratio: 0.15             # 51,000 URLs
+    zero_day_size: 5000          # held-out post-training campaigns
+
+  # 5G Slice annotation thresholds
+  slice_annotation:
+    embb_min_length: 30
+    embb_consumer_keywords:
+      - "bank" 
+      - "pay" 
+      - "account" 
+      - "login" 
+      - "shop"
+      - "social" 
+      - "mail" - "google" 
+      - "facebook"
+      - "amazon" 
+      - "netflix" 
+      - "apple" 
+      - "microsoft"
+    mmtc_max_length: 40
+    mmtc_iot_keywords:
+      - "update" 
+      - "firmware" 
+      - "ota" 
+      - "device"
+      - "sensor" 
+      - "api" 
+      - "mqtt" 
+      - "telemetry" 
+      - "hub" 
+      - "node"
+    mmtc_digit_ratio: 0.40
+    urllc_scada_paths:
+      - "/api/" 
+      - "/control/" 
+      - "/admin/" 
+      - "/scada/"
+      - "/plc/" 
+      - "/hmi/" 
+      - "/modbus/" 
+      - "/opcua/"
+    urllc_ports: [502, 102, 20000, 44818, 4840, 9600]
+
+# ── TF-IDF Feature Extraction ────────────────────────────────
+tfidf:
+  ngram_range: [2, 4]            # char_wb analyzer
+  analyzer: "char_wb"
+  max_features: 50000            # raw vocabulary cap
+  sublinear_tf: true             # 1 + log(tf) scaling
+  norm: "l2"
+  chi2_select_k: 5000            # after chi-squared filtering
+  svd_components: 2048           # Truncated SVD output dim
+  projection_dim: 256            # final dense projection dim
+  dropout_rate: 0.30             # TF-IDF branch dropout (higher)
+
+# ── BERT / DistilBERT ────────────────────────────────────────
+bert:
+  teacher_model: "bert-base-uncased"
+  student_model: "distilbert-base-uncased"
+  tokenizer: "distilbert-base-uncased"
+  max_seq_length: 128
+  hidden_dim: 768                # DistilBERT hidden size
+  pca_components: 256            # CLS embedding reduction
+  attention_heads_pruned: 8      # pruned from 12
+  dropout_rate: 0.10             # BERT branch dropout (lower)
+  freeze_bert_epochs: 3          # Phase 1: freeze BERT layers
+
+# ── Knowledge Distillation ───────────────────────────────────
+distillation:
+  temperature: 4                 # T — ablated over {1,2,4,6,8,10}
+  lambda_kd: 0.70                # weight of KD loss vs CE loss
+  temperature_ablation: [1, 2, 4, 6, 8, 10]
+
+# ── Fusion Gate ──────────────────────────────────────────────
+fusion:
+  strategy: "alpha_gate"         # options: concat|equal|late|alpha_only|alpha_gate
+  alpha_init: 0.0                # w_alpha init (sigmoid(0)=0.5)
+  concat_dim: 768                # 256+256+256 = 768 after full fusion
+  head_dropout: 0.20
+
+# ── Training ─────────────────────────────────────────────────
+training:
+  # Phase 1 — warm-up (head only)
+  phase1_epochs: 3
+  phase1_lr: 1.0e-3
+  phase1_batch_size: 128
+
+  # Phase 2 — full KD
+  phase2_epochs: 15
+  phase2_lr_bert: 2.0e-5         # differential LR for BERT layers
+  phase2_lr_head: 1.0e-4         # head + TF-IDF branch
+  phase2_batch_size: 64
+  weight_decay: 0.01
+
+  # Phase 3 — QAT
+  phase3_epochs: 3
+  phase3_lr: 1.0e-5
+
+  # General
+  early_stopping_patience: 5
+  monitor_metric: "val_f1"
+  optimizer: "AdamW"
+  scheduler: "cosine_annealing"
+  gradient_clip: 1.0
+  mixed_precision: true          # FP16 training
+
+# ── Quantization ─────────────────────────────────────────────
+quantization:
+  strategy: "qat"                # options: none|fp16|int8_dynamic|qat
+  qat_backend: "fbgemm"          # x86; use "qnnpack" for ARM
+
+# ── Evaluation ───────────────────────────────────────────────
+evaluation:
+  threshold: 0.5                 # classification threshold
+  n_bootstrap: 1000              # for 95% CI on ROC-AUC
+  n_seeds: 3                     # independent runs per model
+  significance_alpha: 0.05       # p-value threshold
+  bonferroni_correction: true
+
+# ── Baselines ────────────────────────────────────────────────
+baselines:
+  logistic_regression:
+    C: 1.0
+    max_iter: 1000
+    solver: "lbfgs"
+
+  random_forest:
+    n_estimators: 200
+    max_depth: null
+    n_jobs: -1
+
+  svm:
+    kernel: "rbf"
+    C: 10.0
+    gamma: "scale"
+    probability: true
+
+  xgboost:
+    n_estimators: 300
+    learning_rate: 0.1
+    max_depth: 6
+    n_jobs: -1
+
+  cnn:
+    embedding_dim: 64
+    num_filters: 128
+    kernel_sizes: [3, 4, 5]
+    dropout: 0.5
+
+  rnn_gru:
+    hidden_size: 256
+    num_layers: 2
+    dropout: 0.3
+    bidirectional: true
+
+# ── Edge Deployment ──────────────────────────────────────────
+edge:
+  platforms:
+    - name: "Intel_Xeon-D"
+      precision: ["fp32", "int8_qat"]
+    - name: "Jetson_AGX_Orin"
+      precision: ["fp16", "int8_qat"]
+    - name: "ARM_Cortex-A72"
+      precision: ["int8_qat"]
+
+  latency_measurement:
+    warmup_runs: 1000
+    measurement_runs: 10000
+    batch_size_latency: 1        # single-URL for latency
+    batch_size_throughput: 32    # batch for throughput
+
+  load_levels_per_minute: [1000, 10000, 50000, 100000]
+  sla_budget_ms: 10.0            # 5G MEC latency budget
+  timeout_ms: 8.0                # UPF hard timeout (fail-open)
+
+# ── M/D/1 Queuing Model ──────────────────────────────────────
+queuing:
+  target_percentile: 99          # SLA P99 guarantee
+  scale_factor: 1.1              # safety margin for provisioning
+
+# ── Ablation Studies ─────────────────────────────────────────
+ablation:
+  temperature_values: [1, 2, 4, 6, 8, 10]
+  svd_dimensions: [128, 256, 512, 1024, 2048, 4096, 20000]
+  fusion_strategies: ["concat", "equal_weight", "late_fusion",
+                      "alpha_only", "alpha_gate"]
+  quantization_strategies: ["fp32", "fp16", "int8_dynamic", "int8_qat"]

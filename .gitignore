@@ -1,0 +1,69 @@
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+
+# ── Virtual Environments ─────────────────────────────────
+venv/
+env/
+.venv/
+.env/
+
+# ── IDE & Editor ─────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── OS Files ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# ── Data (too large for Git) ─────────────────────────────
+data/*.csv
+data/github_dataset/
+*.csv.gz
+
+# ── Model Checkpoints ────────────────────────────────────
+models/
+*.pt
+*.pth
+*.onnx
+*.bin
+checkpoints/
+
+# ── Results (generated at runtime) ───────────────────────
+results/*.json
+results/*.txt
+logs/
+
+# ── LaTeX Auxiliary Files ─────────────────────────────────
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+
+# ── Jupyter ──────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Misc ─────────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
