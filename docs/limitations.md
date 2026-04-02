@@ -8,13 +8,14 @@ This document provides a comprehensive and transparent account of all known limi
 ## A. Data Limitations
 
 ### A1. Generic Dataset (HIGH Severity)
-The 340K URL dataset is sourced from general web crawling, not from actual 5G UPF traffic captures. Real 5G network traffic would include:
+The 340K URL dataset is constructed from multiple public sources (PhishTank, OpenPhish, Kaggle, Alexa Top Sites, and Common Crawl), rather than real 5G UPF traffic captures., not from actual 5G UPF traffic captures. 
+The dataset is publicly available on Zenodo (DOI: 10.5281/zenodo.19371661).
+Real 5G network traffic would include:
 - Mobile-specific URLs (app deep links, AMP pages)
 - Carrier-injected headers
 - Different phishing distributions per slice
 
-**Impact**: Results may not transfer directly to production 5G environments.
-
+**Impact**: Results may not directly generalize to real-world 5G production environments without further validation on operator-grade traffic.
 ### A2. Heuristic Slice Annotation (HIGH Severity)
 The `slice` column is assigned by rule-based scoring (IP patterns, keywords, ports), not by actual 5G NSSAI labels from a network operator. The heuristic may:
 - Misclassify URLs with ambiguous patterns
